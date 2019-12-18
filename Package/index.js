@@ -1,5 +1,6 @@
 const AWS = require("aws-sdk");
 const gm = require("gm").subClass({ imageMagick: true });
+const async = require("async");
 
 const s3 = new AWS.S3();
 
@@ -12,8 +13,15 @@ exports.handler = async (event, context) => {
 
   const sourceBucket = event.Records[0].s3.bucket.name;
   const sourceKey = event.Records[0].s3.object.key;
+
+  const lastSlash = sourceKey.lastIndexOf("/");
+  const fileName = sourceKey.substring(lastSlash);
   const destinationBucket = sourceBucket + "/subjectPictures-thumbnails/";
-  const destinationKey = destinationBucket + sourceKey;
+  const destinationKey = "public/subjectPictures-thumbnails" + fileName;
+
+  const lastDot = fileName.lastIndexOf(".");
+  const fileType = fileName.substring(lastDot);
+  console.log("fileType: " + fileType);
 
   //Sanity check: ensure source and destination are different
   if (sourceBucket == destinationBucket) {
@@ -21,32 +29,61 @@ exports.handler = async (event, context) => {
     throw error;
   }
 
-  try {
-    const uploadedImage = await s3
-      .getObject({ Bucket: sourceBucket, key: sourceKey })
-      .promise();
-    const image = gm(uploadedImage.body);
-    const imageSize = gm(image).size();
-    console.log("Current image size: %j", imageSize);
+  async.waterfall(
+    [
+      function downloadImage(callback) {
+        s3.getObject({ Bucket: sourceBucket, Key: sourceKey }, callback);
+      },
+      function transform(response, callback) {
+        gm(response.body).size((error, size) => {
+          console.log("Size of image: " + size);
 
-    const scalingFactor = Math.min(
-      MAX_HEIGHT / imageSize.height,
-      MAX_WIDTH / imageSize.width
-    );
-    const width = scalingFactor * imageSize.width;
-    const height = scalingFactor * imageSize.height;
+          const scalingFactor = Math.min(
+            MAX_HEIGHT / size.height,
+            MAX_WIDTH / size.width
+          );
+          const width = scalingFactor * size.width;
+          const height = scalingFactor * size.height;
 
-    const resizedImage = gm(image).resize(width, height);
-    const imageBuffer = gm(resizedImage).toBuffer;
-    // const thumbnailImage = await s3.putObject({
-    //   Bucket: destinationBucket,
-    //   Key: destinationKey,
-    //   Body: imageBuffer
-    // });
-    console.log("Successfully converted image to thumbnail!");
-    return "Success!";
-  } catch (error) {
-    console.log("ERROR!: %j", error);
-    throw error;
-  }
+          console.log(
+            "Scaling factor: %j",
+            scalingFactor,
+            " width: %j",
+            width,
+            " height: %j",
+            height
+          );
+
+          this.resize(width, height).toBuffer(fileType, (error, buffer) => {
+            console.log("resized image, now buffering...");
+            if (error) {
+              callback(error);
+            } else {
+              callback(null, response.ContentType, buffer);
+            }
+          });
+        });
+      },
+      function upload(contentType, data, callback) {
+        console.log("uploading to S3...");
+        s3.putObject(
+          {
+            Bucket: destinationBucket,
+            Key: destinationKey,
+            Body: data,
+            ContentType: contentType
+          },
+          callback
+        );
+      }
+    ],
+    function(err) {
+      if (err) {
+        console.log("Error in waterfall: " + error);
+      } else {
+        console.log("Successfully created thumbnail");
+      }
+      callback(null, message);
+    }
+  );
 };
