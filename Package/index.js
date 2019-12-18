@@ -12,7 +12,7 @@ exports.handler = async (event, context) => {
 
   const sourceBucket = event.Records[0].s3.bucket.name;
   const sourceKey = event.Records[0].s3.object.key;
-  const destinationBucket = "thumbnails" + sourceBucket;
+  const destinationBucket = sourceBucket + "/subjectPictures-thumbnails/";
   const destinationKey = destinationBucket + sourceKey;
 
   //Sanity check: ensure source and destination are different
