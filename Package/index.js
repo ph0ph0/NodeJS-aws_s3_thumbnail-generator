@@ -36,14 +36,15 @@ exports.handler = async (event, context) => {
     const width = scalingFactor * imageSize.width;
     const height = scalingFactor * imageSize.height;
 
-    const resizedImage = gm(image).resize(widht, height);
+    const resizedImage = gm(image).resize(width, height);
     const imageBuffer = gm(resizedImage).toBuffer;
-    const thumbnailImage = await s3.putObject({
-      Bucket: destinationBucket,
-      Key: destinationKey,
-      Body: imageBuffer
-    });
+    // const thumbnailImage = await s3.putObject({
+    //   Bucket: destinationBucket,
+    //   Key: destinationKey,
+    //   Body: imageBuffer
+    // });
     console.log("Successfully converted image to thumbnail!");
+    return "Success!";
   } catch (error) {
     console.log("ERROR!: %j", error);
     throw error;
