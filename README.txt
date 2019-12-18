@@ -1,0 +1,1 @@
+This lambda was created to compress and shrink image file uploads to S3 into thumbnail images. It contains a publish script that can be ran using ./publish.sh. Note that if you want to use this in a different project, you will have to configure aws CLI to do so.
