@@ -13,13 +13,27 @@ exports.handler = async (event, context) => {
   const sourceBucket = event.Records[0].s3.bucket.name;
   const sourceKey = event.Records[0].s3.object.key;
   const lastSlash = sourceKey.lastIndexOf("/");
-  const fileName = sourceKey.substring(lastSlash);
-  const destinationBucket = sourceBucket + "/subjectPictures-thumbnails/";
-  const destinationKey = "public/subjectPictures-thumbnails" + fileName;
+  const fileName = sourceKey.substring(lastSlash + 1);
+  const destinationBucket = sourceBucket;
+  const destinationKey = "public/subjectPictures-thumbnails/" + fileName;
 
-  //Sanity check: ensure source and destination are different
-  if (sourceBucket == destinationBucket) {
-    const error = new Error("source and desitnation buckets were the same");
+  console.log(
+    "Upload details, sourceBucket: " +
+      sourceBucket +
+      " sourceKey: " +
+      sourceKey +
+      " fileName: " +
+      fileName +
+      " destinationBucket: " +
+      destinationBucket +
+      " destinationKey " +
+      destinationKey
+  );
+
+  //Prevent Recursion: Ensure lambda only triggered on initial upload
+  if (sourceKey.includes("thumbnails")) {
+    const error = new Error("Preventing recursion on uploaded thumbnail");
+    context.done(error, null);
     throw error;
   }
 
@@ -30,21 +44,22 @@ exports.handler = async (event, context) => {
 
     // console.log("Uploaded image body: " + uploadedImage);
 
-    sharp(uploadedImage.Body)
+    const imageToUpload = await sharp(uploadedImage.Body)
       .resize(MAX_WIDTH, MAX_HEIGHT, {
-        fit: "contain"
+        // fit: "contain"
       })
-      .toBuffer()
-      .then(data => {
-        s3.putObject({
-          Bucket: destinationBucket,
-          Key: destinationKey,
-          Body: data
-        });
+      .toBuffer();
+
+    console.log("Got imageToUpload");
+
+    const thumbnailKey = await s3
+      .putObject({
+        Bucket: destinationBucket,
+        Key: destinationKey,
+        Body: imageToUpload
       })
-      .then(() => {
-        console.log("Success!");
-      });
+      .promise();
+    context.done(null, thumbnailKey);
 
     // const imageSize = await gm(uploadedImage.body).size((error, size) => {
     //   console.log("width: " + size.width + " height: " + size.height);
@@ -77,6 +92,7 @@ exports.handler = async (event, context) => {
     // return thumbnailImage;
   } catch (error) {
     console.log("ERROR!: " + error);
-    throw error;
+    context.done(error, null);
+    // throw error;
   }
 };
