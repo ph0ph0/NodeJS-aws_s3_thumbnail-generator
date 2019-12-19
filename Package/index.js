@@ -1,6 +1,5 @@
 const AWS = require("aws-sdk");
 const sharp = require("sharp");
-const calipers = require("calipers")("png", "jpeg");
 
 const s3 = new AWS.S3();
 
@@ -39,25 +38,16 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    console.log("Transforming image...");
     const uploadedImage = await s3
       .getObject({ Bucket: sourceBucket, Key: sourceKey })
       .promise();
 
-    const imageSize = sizeOf(uploadedImage.Body);
-    console.log(
-      "Size, width: " + imageSize.width + " height: " + imageSize.height
-    );
-
-    const imageSize = sizeOf(uploadedImage.Body);
-    console.log(
-      "Size, width: " + imageSize.width + " height: " + imageSize.height
-    );
+    const scaledDimensions = scaledDimensions(uploadedImage.Body);
 
     const imageToUpload = await sharp(uploadedImage.Body)
-      .resize(MAX_WIDTH, MAX_HEIGHT)
+      .resize(scaledDimensions.width, scaledDimensions.height)
       .toBuffer();
-
-    console.log("Got imageToUpload");
 
     const thumbnailKey = await s3
       .putObject({
@@ -71,4 +61,35 @@ exports.handler = async (event, context) => {
     console.log("ERROR!: " + error);
     throw error;
   }
+};
+
+const getSize = image => {
+  return new Promise((resolve, reject) => {
+    console.log("getting size...");
+    sharp(image).toBuffer((err, data, info) => {
+      if (err) reject(err);
+      else resolve(info);
+    });
+  });
+};
+
+const getScaledWidthAndHeight = async image => {
+  const imageSize = await getSize(image);
+  console.log(
+    "imageSize, width: " + imageSize.width + " height: " + imageSize.height
+  );
+  const scalingFactor = Math.min(
+    MAX_WIDTH / imageSize.width,
+    MAX_HEIGHT / imageSize.height
+  );
+  console.log("scalingFactor: " + scalingFactor);
+
+  const width = scalingFactor * imageSize.width;
+  const height = scalingFactor * imageSize.height;
+  console.log("scaledWidth: " + width + ", scaledHeight: " + height);
+
+  return {
+    width: width,
+    height: height
+  };
 };
