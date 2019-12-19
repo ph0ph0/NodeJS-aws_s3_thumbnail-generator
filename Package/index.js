@@ -43,10 +43,12 @@ exports.handler = async (event, context) => {
       .getObject({ Bucket: sourceBucket, Key: sourceKey })
       .promise();
 
-    const scaledDimensions = scaledDimensions(uploadedImage.Body);
+    const scaledDimensions = await getScaledWidthAndHeight(uploadedImage.Body);
 
     const imageToUpload = await sharp(uploadedImage.Body)
-      .resize(scaledDimensions.width, scaledDimensions.height)
+      .resize(scaledDimensions.width, scaledDimensions.height, {
+        fit: "contain"
+      })
       .toBuffer();
 
     const thumbnailKey = await s3
@@ -84,8 +86,8 @@ const getScaledWidthAndHeight = async image => {
   );
   console.log("scalingFactor: " + scalingFactor);
 
-  const width = scalingFactor * imageSize.width;
-  const height = scalingFactor * imageSize.height;
+  const width = Math.round(scalingFactor * imageSize.width);
+  const height = Math.round(scalingFactor * imageSize.height);
   console.log("scaledWidth: " + width + ", scaledHeight: " + height);
 
   return {
