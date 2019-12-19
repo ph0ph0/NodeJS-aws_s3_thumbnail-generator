@@ -1,5 +1,6 @@
 const AWS = require("aws-sdk");
 const sharp = require("sharp");
+const calipers = require("calipers")("png", "jpeg");
 
 const s3 = new AWS.S3();
 
@@ -42,12 +43,18 @@ exports.handler = async (event, context) => {
       .getObject({ Bucket: sourceBucket, Key: sourceKey })
       .promise();
 
-    // console.log("Uploaded image body: " + uploadedImage);
+    const imageSize = sizeOf(uploadedImage.Body);
+    console.log(
+      "Size, width: " + imageSize.width + " height: " + imageSize.height
+    );
+
+    const imageSize = sizeOf(uploadedImage.Body);
+    console.log(
+      "Size, width: " + imageSize.width + " height: " + imageSize.height
+    );
 
     const imageToUpload = await sharp(uploadedImage.Body)
-      .resize(MAX_WIDTH, MAX_HEIGHT, {
-        // fit: "contain"
-      })
+      .resize(MAX_WIDTH, MAX_HEIGHT)
       .toBuffer();
 
     console.log("Got imageToUpload");
@@ -59,40 +66,9 @@ exports.handler = async (event, context) => {
         Body: imageToUpload
       })
       .promise();
-    context.done(null, thumbnailKey);
-
-    // const imageSize = await gm(uploadedImage.body).size((error, size) => {
-    //   console.log("width: " + size.width + " height: " + size.height);
-    //   const scalingFactor = Math.min(
-    //     MAX_HEIGHT / size.height,
-    //     MAX_WIDTH / size.width
-    //   );
-    //   const width = scalingFactor * size.width;
-    //   const height = scalingFactor * size.height;
-
-    //   console.log(
-    //     "Scaling factor: %j",
-    //     scalingFactor,
-    //     " width: %j",
-    //     width,
-    //     " height: %j",
-    //     height
-    //   );
-    //   return width;
-    // });
-    // console.log("imageSize: %j", +imageSize);
-
-    // const imageBuffer = gm(resizedImage).toBuffer;
-    // const thumbnailImage = await s3.putObject({
-    //   Bucket: destinationBucket,
-    //   Key: destinationKey,
-    //   Body: imageBuffer
-    // });
-    // console.log("Successfully wrote image, path: %j", thumbnailImage);
-    // return thumbnailImage;
+    return thumbnailKey;
   } catch (error) {
     console.log("ERROR!: " + error);
-    context.done(error, null);
-    // throw error;
+    throw error;
   }
 };
