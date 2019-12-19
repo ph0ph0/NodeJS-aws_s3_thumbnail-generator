@@ -4,8 +4,10 @@ const sharp = require("sharp");
 const s3 = new AWS.S3();
 
 //Constants
-const MAX_WIDTH = 175;
-const MAX_HEIGHT = 123;
+const THUMBNAIL_MAX_WIDTH = 175;
+const THUMBNAIL_MAX_HEIGHT = 123;
+const DETAIL_MAX_WIDTH = 670;
+const DETAIL_MAX_HEIGHT = 460;
 
 exports.handler = async (event, context) => {
   console.log("Intercepted S3 upload, event: %j", event);
@@ -15,7 +17,10 @@ exports.handler = async (event, context) => {
   const lastSlash = sourceKey.lastIndexOf("/");
   const fileName = sourceKey.substring(lastSlash + 1);
   const destinationBucket = sourceBucket;
-  const destinationKey = "public/subjectPictures-thumbnails/" + fileName;
+  const thumbnailDestinationKey =
+    "public/subjectPictures-thumbnails_175x123/" + fileName;
+  const detailImageDestinationKey =
+    "public/subjectPictures-detailImages_670x460" + fileName;
 
   console.log(
     "Upload details, sourceBucket: " +
@@ -38,27 +43,65 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    console.log("Transforming image...");
+    console.log("Processing images");
     const uploadedImage = await s3
       .getObject({ Bucket: sourceBucket, Key: sourceKey })
       .promise();
+    const image = uploadedImage.Body;
 
-    const scaledDimensions = await getScaledWidthAndHeight(uploadedImage.Body);
+    //Get scaled thumbnail width and height
+    console.log("Getting scaled thumbnail width and height");
+    const thumbnailScaledDimensions = await getScaledWidthAndHeight(
+      image,
+      THUMBNAIL_MAX_WIDTH,
+      THUMBNAIL_MAX_HEIGHT
+    );
 
-    const imageToUpload = await sharp(uploadedImage.Body)
-      .resize(scaledDimensions.width, scaledDimensions.height, {
-        fit: "contain"
-      })
-      .toBuffer();
+    //Create buffer of thumbnailImage
+    console.log("Creating buffer of thumbnailImage");
+    const thumbnailImage = await transform(
+      image,
+      thumbnailScaledDimensions.width,
+      thumbnailScaledDimensions.height
+    );
 
-    const thumbnailKey = await s3
+    console.log("Uploading thumbnail");
+    await s3
       .putObject({
         Bucket: destinationBucket,
-        Key: destinationKey,
-        Body: imageToUpload
+        Key: thumbnailDestinationKey,
+        Body: thumbnailImage
       })
       .promise();
-    return thumbnailKey;
+
+    //Get scaled detailImage width and height
+    console.log("Getting scaled detailImage width and height");
+    const detailImageScaledDimensions = await getScaledWidthAndHeight(
+      image,
+      DETAIL_MAX_WIDTH,
+      DETAIL_MAX_HEIGHT
+    );
+
+    //Create buffer of detailImage
+    console.log("Creating buffer of detailImage");
+    const detailImage = await transform(
+      image,
+      detailImageScaledDimensions.width,
+      detailImageScaledDimensions.height
+    );
+
+    //Upload detailImage
+    console.log("Uploading detail image");
+    await s3
+      .putObject({
+        Bucket: destinationBucket,
+        Key: detailImageDestinationKey,
+        Body: detailImage
+      })
+      .promise();
+
+    console.log("DONE!");
+    return;
   } catch (error) {
     console.log("ERROR!: " + error);
     throw error;
@@ -75,14 +118,14 @@ const getSize = image => {
   });
 };
 
-const getScaledWidthAndHeight = async image => {
+const getScaledWidthAndHeight = async (image, max_width, max_height) => {
   const imageSize = await getSize(image);
   console.log(
     "imageSize, width: " + imageSize.width + " height: " + imageSize.height
   );
   const scalingFactor = Math.min(
-    MAX_WIDTH / imageSize.width,
-    MAX_HEIGHT / imageSize.height
+    max_width / imageSize.width,
+    max_height / imageSize.height
   );
   console.log("scalingFactor: " + scalingFactor);
 
@@ -94,4 +137,12 @@ const getScaledWidthAndHeight = async image => {
     width: width,
     height: height
   };
+};
+
+const transform = async (image, width, height) => {
+  return await sharp(image)
+    .resize(width, height, {
+      fit: "contain"
+    })
+    .toBuffer();
 };
