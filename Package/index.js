@@ -20,20 +20,7 @@ exports.handler = async (event, context) => {
   const thumbnailDestinationKey =
     "public/subjectPictures-thumbnails_175x123/" + fileName;
   const detailImageDestinationKey =
-    "public/subjectPictures-detailImages_670x460" + fileName;
-
-  console.log(
-    "Upload details, sourceBucket: " +
-      sourceBucket +
-      " sourceKey: " +
-      sourceKey +
-      " fileName: " +
-      fileName +
-      " destinationBucket: " +
-      destinationBucket +
-      " destinationKey " +
-      destinationKey
-  );
+    "public/subjectPictures-detailImages_670x460/" + fileName;
 
   //Prevent Recursion: Ensure lambda only triggered on initial upload
   if (sourceKey.includes("thumbnails")) {
